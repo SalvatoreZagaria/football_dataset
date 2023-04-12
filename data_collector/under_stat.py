@@ -13,26 +13,26 @@ SESSION: aiohttp.ClientSession = None
 UNDERSTAT_CLIENT: Understat = None
 
 
-def init_session(force=False):
+async def init_session(force=False):
     LOGGER.info('init session...', extra={'force': force})
     global SESSION, UNDERSTAT_CLIENT
     if force:
-        close_session()
+        await close_session()
     SESSION = aiohttp.ClientSession()
     UNDERSTAT_CLIENT = Understat(SESSION)
 
 
-def close_session():
+async def close_session():
     global SESSION
     if not SESSION.closed:
-        SESSION.close()
+        await SESSION.close()
 
 
 async def get_league_teams_in_year(league_name: str, year: int) -> t.List[t.Dict[str, str]]:
     try:
         teams = await UNDERSTAT_CLIENT.get_teams(league_name, year)
     except client_exceptions.ServerDisconnectedError:
-        init_session()
+        await init_session()
         teams = await UNDERSTAT_CLIENT.get_teams(league_name, year)
     if not teams:
         return []
@@ -43,7 +43,7 @@ async def get_team_players_in_year(team_name: str, year: int) -> t.List[t.Dict[s
     try:
         players = await UNDERSTAT_CLIENT.get_team_players(team_name, year)
     except client_exceptions.ServerDisconnectedError:
-        init_session()
+        await init_session()
         players = await UNDERSTAT_CLIENT.get_team_players(team_name, year)
     if not players:
         return []
@@ -58,7 +58,7 @@ async def fix_half_season_player(player_obj: t.Dict[str, str], teams: t.List[t.D
     try:
         player_stats = await UNDERSTAT_CLIENT.get_player_grouped_stats(player_id)
     except client_exceptions.ServerDisconnectedError:
-        init_session()
+        await init_session()
         player_stats = await UNDERSTAT_CLIENT.get_player_grouped_stats(player_id)
     seasons = [s for s in player_stats.get('season') or [] if s['season'] == year]
     if len(seasons) != 2:
@@ -80,6 +80,7 @@ async def fix_half_season_player(player_obj: t.Dict[str, str], teams: t.List[t.D
             LOGGER.error('Unhandled case', extra={'error': 'player obj must be len=1', 'player_obj': player_obj,
                                                   'player_id': player_id, 'team_name': team_name})
             return
+        player_obj = player_obj[0]
         player_obj[key] = False
 
 
@@ -101,7 +102,7 @@ async def fix_half_season_transfers(teams: t.List[t.Dict[str, t.Union[str, bool]
 
 async def main(year_from: int, year_to: int, leagues=data_collector.LEAGUES):
     res = {}
-    init_session()
+    await init_session()
 
     if isinstance(leagues, str):
         leagues = (leagues,)
@@ -115,6 +116,7 @@ async def main(year_from: int, year_to: int, leagues=data_collector.LEAGUES):
                 LOGGER.info(f'team {team}...')
                 team['players'] = await get_team_players_in_year(team['name'], year)
             await fix_half_season_transfers(res[league][year]['teams'], year)
-            init_session(force=True)
+            await init_session(force=True)
 
-    close_session()
+    await close_session()
+    return res
