@@ -35,30 +35,70 @@ class APIFootballClient:
 
         self._requests_block = requests_block
 
-    def send_request(self, partial_url: str, params: dict = None) -> t.Optional[t.Any]:
+    def send_request(self, partial_url: str, params: dict = None) -> t.Optional[t.Dict]:
         url = f'{self._url}/{partial_url}'
+
         if self._enable_cache:
             cached_response = utils.read_from_cache(url, params=params)
             if cached_response:
+                LOGGER.info(f'cache hit - {url}; params: {str(params)}')
                 return cached_response
 
         if self._requests_block is not None and self._requests_so_far >= self._requests_block:
             msg = f'API limit reached (requests_n: {self._requests_so_far}, block: {self._requests_block})'
             raise APILimitReached(msg)
         self._requests_so_far += 1
+        LOGGER.info(f'starting request - {url}; params: {str(params)}')
         response = requests.get(url, params=params, headers=self._headers)
         if response.status_code != 200:
-            LOGGER.info(f'Received a non 200 status code: {response.status_code} : {response.text}')
+            LOGGER.warning(f'Received a non 200 status code: {response.status_code} : {response.text}')
+            return None
+        if response.json().get('errors'):
+            LOGGER.warning(
+                f'Received one or more errors in the response: {"; ".join(response.json().get("errors", []))}')
             return None
         if self._enable_cache:
             utils.cache_result(utils.prepare_for_caching(url, params=params), response)
 
         return response.json()
 
-    def get_leagues(self, filter_by: t.Tuple[t.Tuple[str, str]] = LEAGUES):
-        response = self.send_request('leagues')
+    def get_clean_response(self, partial_url: str, params: dict = None, pagination=False) -> t.Optional[t.List]:
+        if pagination:
+            response = self.send_request_with_pagination(partial_url, params)
+        else:
+            response = self.send_request(partial_url, params)
+            response = response.get('response', []) if response else None
+        return response
+
+    def send_request_with_pagination(self, partial_url: str, params: dict = None) -> t.Optional[t.List[t.Dict]]:
+        res = []
+        current_page = 1
+        while True:
+            params['page'] = current_page
+            current_response = self.send_request(partial_url, params=params)
+            if current_response is None:
+                LOGGER.warning(f'Returning partial result for pagination - url: {partial_url}, params: {str(params)}')
+                return res
+            total_pages = current_response.get('paging', {}).get('total', 1)
+            current_page = current_response.get('paging', {}).get('current', 1)
+            LOGGER.info(f'\tpagination {current_page}/{total_pages}')
+
+            res.extend(current_response.get('response', []))
+
+            if current_page == total_pages:
+                return res
+            current_page += 1
+
+    def get_leagues(self, filter_by: t.Tuple[t.Tuple[str, str]] = LEAGUES) -> t.Optional[t.List[t.Dict]]:
+        LOGGER.info('requesting teams')
+        response = self.get_clean_response('leagues')
         if response:
-            response = response.get('response', [])
             response = [r for r in response if (r['league']['name'], r['country']['name']) in filter_by]
+
+        return response
+
+    def get_league_players(self, league_id, year) -> t.Optional[t.List[t.Dict]]:
+        LOGGER.info(f'requesting league players - {league_id}, year {year}')
+        response = self.get_clean_response('players', params={'league': league_id, 'season': year}, pagination=True)
 
         return response
