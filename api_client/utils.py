@@ -8,9 +8,8 @@ from pathlib import Path
 
 import logger
 
+LOGGER = logger.get_logger('api_client')
 CACHE_FOLDER: Path = None
-
-LOGGER = logger.init_logs('api_client')
 
 
 def get_api_key() -> t.Optional[str]:

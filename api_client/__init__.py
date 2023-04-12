@@ -5,8 +5,7 @@ from pathlib import Path
 import logger
 from api_client import utils
 
-
-LOGGER = logger.init_logs('api_client')
+LOGGER = logger.get_logger('api_client')
 
 LEAGUES = (('Serie A', 'Italy'), ('Premier League', 'England'))
 
