@@ -17,8 +17,8 @@ def get_api_key() -> t.Optional[str]:
     return key or None
 
 
-def get_api_host() -> str:
-    return os.getenv('RAPID_API_HOST', 'api-football-v1.p.rapidapi.com')
+def get_api_football_host() -> str:
+    return os.getenv('API_FOOTBALL_HOST', 'api-football-v1.p.rapidapi.com')
 
 
 def prepare_for_caching(request_url: str, params: dict = None) -> str:
@@ -42,7 +42,7 @@ def cache_result(hashed_url: str, response: requests.Response):
         return
 
     with open(path_to_obj, 'w') as f:
-        json.dump(obj, f, indent=4)
+        json.dump(obj, f, indent=4, ensure_ascii=False)
 
 
 def read_from_cache(url, params: dict = None) -> t.Optional[t.Any]:
