@@ -1,7 +1,5 @@
-import os
-
-from sqlalchemy import ForeignKey, String, Column, Integer, LargeBinary, PrimaryKeyConstraint, DateTime, Float, \
-    MetaData, create_engine
+from sqlalchemy import ForeignKey, String, Column, Integer, LargeBinary, DateTime, Float, MetaData, create_engine, \
+    PrimaryKeyConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -42,7 +40,20 @@ class League(base):
     display_name = Column(String)
     img = Column(LargeBinary)
     img_url = Column(String)
+    country_code = Column(String)
     teams = relationship('team', backref='league')
+
+
+class LeagueSeasons(base):
+    __tablename__ = 'leagueseasons'
+    __table_args__ = (
+        PrimaryKeyConstraint('league_id', 'year'),
+    )
+
+    league_id = Column(String, ForeignKey('league.id'))
+    year = Column(Integer)
+    start_date = Column(DateTime, default=None)
+    end_date = Column(DateTime, default=None)
 
 
 class Militancy(base):

@@ -1,1 +1,0 @@
-LEAGUES = ('serie_a',)

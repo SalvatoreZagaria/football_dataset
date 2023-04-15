@@ -47,6 +47,10 @@ class APIFootballClient:
         LOGGER.info(f'starting request - {url}; params: {str(params)}')
         while True:
             response = requests.get(url, params=params, headers=self._headers)
+            remaining_requests = response.headers.get('x-ratelimit-requests-remaining', 0)
+            if int(remaining_requests) < 10:
+                msg = f'API limit reached ({remaining_requests} remaining)'
+                raise api_client.APILimitReached(msg)
             if response.status_code == 429:
                 LOGGER.warning(f'Rate limit: {response.status_code} : {response.text}')
                 time.sleep(5)

@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import requests
+import datetime
 import typing as t
 
 from pathlib import Path
@@ -56,3 +57,14 @@ def read_from_cache(url, params: dict = None) -> t.Optional[t.Any]:
         except Exception as e:
             LOGGER.error(f'CACHE - Exception occurred while parsing json file for cache: {e}')
             return None
+
+
+def convert_to_datetime(text: str, quiet=True):
+    def convert_from_iso():
+        return datetime.datetime.fromisoformat(text)
+    if quiet:
+        try:
+            return convert_from_iso()
+        except:
+            return None
+    return convert_from_iso()
