@@ -5,7 +5,8 @@ import traceback
 from multiprocessing import Pool
 
 import logger
-from api_client import api_football_client, utils
+from api_client import api_football_client
+from data_generator import utils
 import db_interactor
 from db_interactor import model as m
 
