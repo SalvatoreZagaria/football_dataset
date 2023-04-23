@@ -45,15 +45,25 @@ class APIFootballClient:
             raise api_client.APILimitReached(msg)
         self._requests_so_far += 1
         LOGGER.info(f'starting request - {url}; params: {str(params)}')
+        retried = False
         while True:
             response = requests.get(url, params=params, headers=self._headers)
             remaining_requests = response.headers.get('x-ratelimit-requests-remaining', 0)
             if int(remaining_requests) < 10:
                 msg = f'API limit reached ({remaining_requests} remaining)'
-                raise api_client.APILimitReached(msg)
+                if retried:
+                    raise api_client.APILimitReached(msg)
+                LOGGER.warning(msg)
+                retried = True
+                time.sleep(15)
+                continue
             if response.status_code == 429:
-                LOGGER.warning(f'Rate limit: {response.status_code} : {response.text}')
-                time.sleep(5)
+                msg = f'Rate limit: {response.status_code} : {response.text}'
+                if retried:
+                    raise api_client.APILimitReached(msg)
+                LOGGER.warning(msg)
+                retried = True
+                time.sleep(15)
                 continue
             break
 
@@ -115,5 +125,11 @@ class APIFootballClient:
     def get_player_stats(self, player_id, year):
         LOGGER.info(f'requesting player stats - {player_id}')
         response = self.get_clean_response('players', params={'id': player_id, 'season': year})
+
+        return response
+
+    def get_team_transfers(self, team_id):
+        LOGGER.info(f'requesting team transfers - {team_id}')
+        response = self.get_clean_response('transfers', params={'team': team_id})
 
         return response

@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, String, Column, Integer, LargeBinary, DateTime, Float, MetaData, create_engine, \
+from sqlalchemy import ForeignKey, String, Column, Integer, LargeBinary, Date, Float, MetaData, create_engine, \
     PrimaryKeyConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -10,38 +10,53 @@ base = declarative_base(metadata=metadata_obj)
 engine = create_engine(db_utils.get_db_url())
 
 
+class Militancy(base):
+    __tablename__ = 'militancy'
+    __table_args__ = (
+        PrimaryKeyConstraint('player_id', 'team_id', 'year'),
+    )
+
+    player_id = Column(Integer, ForeignKey('player.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
+    year = Column(Integer)
+    start_date = Column(Date, default=None)
+    end_date = Column(Date, default=None)
+    rating = Column(Float)
+    appearences = Column(Integer)
+
+
 class Player(base):
     __tablename__ = 'player'
 
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String)
     surname = Column(String)
     position = Column(String)
     img = Column(LargeBinary)
     img_url = Column(String)
-    militancy = relationship('militancy', backref='player')
+    militancy = relationship(Militancy, backref='player')
 
 
 class Team(base):
     __tablename__ = 'team'
 
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String)
     img = Column(LargeBinary)
     img_url = Column(String)
-    league_id = Column(String, ForeignKey('league.id'))
-    militancy = relationship('militancy', backref='team')
+    league_id = Column(Integer, ForeignKey('league.id'))
+    militancy = relationship(Militancy, backref='team')
 
 
 class League(base):
     __tablename__ = 'league'
 
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
     display_name = Column(String)
     img = Column(LargeBinary)
     img_url = Column(String)
     country_code = Column(String)
-    teams = relationship('team', backref='league')
+    teams = relationship(Team, backref='league')
 
 
 class LeagueSeasons(base):
@@ -50,19 +65,7 @@ class LeagueSeasons(base):
         PrimaryKeyConstraint('league_id', 'year'),
     )
 
-    league_id = Column(String, ForeignKey('league.id'))
+    league_id = Column(Integer, ForeignKey('league.id'))
     year = Column(Integer)
-    start_date = Column(DateTime, default=None)
-    end_date = Column(DateTime, default=None)
-
-
-class Militancy(base):
-    __tablename__ = 'militancy'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    player_id = Column(String, ForeignKey('player.id'))
-    team_id = Column(String, ForeignKey('team.id'))
-    year = Column(Integer)
-    start_date = Column(DateTime, default=None)
-    end_date = Column(DateTime, default=None)
-    rating = Column(Float)
+    start_date = Column(Date, default=None)
+    end_date = Column(Date, default=None)

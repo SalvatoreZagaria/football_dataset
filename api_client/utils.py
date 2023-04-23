@@ -59,9 +59,9 @@ def read_from_cache(url, params: dict = None) -> t.Optional[t.Any]:
             return None
 
 
-def convert_to_datetime(text: str, quiet=True):
+def convert_to_date(text: str, quiet=True):
     def convert_from_iso():
-        return datetime.datetime.fromisoformat(text)
+        return datetime.date.fromisoformat(text)
     if quiet:
         try:
             return convert_from_iso()
