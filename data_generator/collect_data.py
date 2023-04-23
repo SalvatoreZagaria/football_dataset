@@ -11,7 +11,7 @@ import db_interactor
 from db_interactor import model as m
 
 
-LOGGER = logger.get_logger('api_client')
+LOGGER = logger.get_logger('data_generator')
 
 
 def get_insert_do_nothing_stmt(table, values, no_constraint=False):

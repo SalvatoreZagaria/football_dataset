@@ -1,3 +1,4 @@
+import time
 import typing as t
 import sqlalchemy
 from sqlalchemy.orm import Session
@@ -11,7 +12,7 @@ import db_interactor
 from db_interactor import model as m
 
 
-LOGGER = logger.get_logger('api_client')
+LOGGER = logger.get_logger('data_generator')
 
 
 def initializer():
@@ -118,7 +119,6 @@ def fix_transfers():
 
 
 if __name__ == '__main__':
-    import time
     start = time.time()
     fix_transfers()
     print(f'Time taken: {time.time() - start}')
