@@ -30,13 +30,13 @@ def get_all_teams(session: Session):
 
 def create_militancy_if_possible(player_id, team_id, transfer_date, session) -> t.Optional[m.Militancy]:
     team = session.query(m.Team).filter_by(id=team_id).first()
-    if not team:
+    if not team or not team.militancy:
         return None
     if session.query(m.Player.id).filter_by(id=player_id).first() is None:
         return None
-    team_seasons = session.query(m.LeagueSeasons).filter_by(league_id=team.league_id).all()
-    if not team_seasons:
-        return None
+
+    league_ids = [mi.league_id for mi in team.militancy]
+    team_seasons = session.query(m.LeagueSeasons).filter(m.LeagueSeasons.league_id.in_(league_ids)).all()
     seasons = [ts for ts in team_seasons if ts.start_date < transfer_date < ts.end_date]
     if seasons:
         season = seasons[0]
@@ -49,7 +49,7 @@ def create_militancy_if_possible(player_id, team_id, transfer_date, session) -> 
         return None
 
     militancy = m.Militancy(player_id=player_id, team_id=team_id, year=season.year, start_date=season.start_date,
-                            end_date=season.end_date, appearences=0)
+                            end_date=season.end_date)
     return militancy
 
 
@@ -101,7 +101,7 @@ def fix_transfers():
 
     args = [(t_id,) for t_id in team_ids]
     try:
-        with Pool(4, initializer=initializer) as p:
+        with Pool(14, initializer=initializer) as p:
             data = p.map(get_team_transfer, args)
 
         transfers = [tr for d in data for tr in d]

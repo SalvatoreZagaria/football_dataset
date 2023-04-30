@@ -10,6 +10,26 @@ base = declarative_base(metadata=metadata_obj)
 engine = create_engine(db_utils.get_db_url())
 
 
+class TeamMilitancy(base):
+    __tablename__ = 'teammilitancy'
+    __table_args__ = (
+        PrimaryKeyConstraint('team_id', 'league_id', 'year'),
+    )
+    team_id = Column(Integer, ForeignKey('team.id'))
+    league_id = Column(Integer, ForeignKey('league.id'))
+    year = Column(Integer)
+
+
+class Team(base):
+    __tablename__ = 'team'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    img = Column(LargeBinary)
+    img_url = Column(String)
+    militancy = relationship(TeamMilitancy, backref='team')
+
+
 class Militancy(base):
     __tablename__ = 'militancy'
     __table_args__ = (
@@ -21,8 +41,7 @@ class Militancy(base):
     year = Column(Integer)
     start_date = Column(Date, default=None)
     end_date = Column(Date, default=None)
-    rating = Column(Float)
-    appearences = Column(Integer)
+    team = relationship(Team, backref='player_militancy')
 
 
 class Player(base):
@@ -34,18 +53,8 @@ class Player(base):
     position = Column(String)
     img = Column(LargeBinary)
     img_url = Column(String)
+    value = Column(Float)
     militancy = relationship(Militancy, backref='player')
-
-
-class Team(base):
-    __tablename__ = 'team'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    img = Column(LargeBinary)
-    img_url = Column(String)
-    league_id = Column(Integer, ForeignKey('league.id'))
-    militancy = relationship(Militancy, backref='team')
 
 
 class League(base):
@@ -56,7 +65,7 @@ class League(base):
     img = Column(LargeBinary)
     img_url = Column(String)
     country_code = Column(String)
-    teams = relationship(Team, backref='league')
+    militancy = relationship(TeamMilitancy, backref='league')
 
 
 class LeagueSeasons(base):

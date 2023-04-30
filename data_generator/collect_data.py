@@ -61,10 +61,11 @@ def store_leagues(leagues: t.List[t.Dict]) -> t.List[t.Dict]:
 
 def process_players_batch(players_batch: t.List[t.Dict], season: t.Dict):
     teams = []
+    team_militancies = []
     players = []
     militancies = []
     if not players_batch:
-        return teams, players, militancies
+        return teams, team_militancies, players, militancies
 
     for p in players_batch:
         if not p.get('player', {}).get('id') or not p.get('statistics'):
@@ -77,20 +78,23 @@ def process_players_batch(players_batch: t.List[t.Dict], season: t.Dict):
         for s in p['statistics']:
             if not s.get('team', {}).get('id'):
                 continue
-            team_values = {'id': s['team']['id'], 'name': s['team']['name'], 'img_url': s['team']['logo'],
-                           'league_id': s['league']['id']}
+            team_values = {'id': s['team']['id'], 'name': s['team']['name'], 'img_url': s['team']['logo']}
             teams.append(team_values)
+
+            team_militancy_values = {'league_id': s['league']['id'], 'team_id': s['team']['id'],
+                                     'year': season['year']}
+            team_militancies.append(team_militancy_values)
 
             militancy_values = {'player_id': player_values['id'], 'team_id': team_values['id'],
                                 'year': season['year'], 'start_date': season['start_date'],
-                                'end_date': season['end_date'], 'rating': s['games']['rating'],
-                                'appearences': s['games']['appearences'] or 0}
+                                'end_date': season['end_date']}
             militancies.append(militancy_values)
 
     teams = list({team['id']: team for team in teams}.values())
+    team_militancies = list({(tm['league_id'], tm['team_id'], tm['year']): tm for tm in team_militancies}.values())
     militancies = list({(mi['player_id'], mi['team_id'], mi['year']): mi for mi in militancies}.values())
 
-    return teams, players, militancies
+    return teams, team_militancies, players, militancies
 
 
 def initializer():
@@ -101,8 +105,8 @@ def process_league_year_players(*args):
     l_id, season = args[0]
     client = api_football_client.APIFootballClient()
     players = client.get_league_players(l_id, season['year'])
-    teams, players, militancies = process_players_batch(players, season)
-    return teams, players, militancies
+    teams, team_militancies, players, militancies = process_players_batch(players, season)
+    return teams, team_militancies, players, militancies
 
 
 def process_teams(teams):
@@ -111,6 +115,15 @@ def process_teams(teams):
     with db_interactor.get_session() as session:
         teams_objs = [m.Team(**team) for team in teams.values()]
         session.bulk_save_objects(teams_objs)
+        session.commit()
+
+
+def process_team_militancies(team_militancies):
+    team_militancies = {(tm['league_id'], tm['team_id'], tm['year']): tm for tm in team_militancies}
+    LOGGER.info(f'TEAMS - storing {len(team_militancies)} team militancies')
+    with db_interactor.get_session() as session:
+        team_militancies_objs = [m.TeamMilitancy(**tm) for tm in team_militancies.values()]
+        session.bulk_save_objects(team_militancies_objs)
         session.commit()
 
 
@@ -140,16 +153,19 @@ def main():
 
     args = [(league['id'], s) for league in all_leagues for s in league['seasons']]
     LOGGER.info(f'LEAGUES - Starting multiprocessing ({len(args)}) processes')
-    with Pool(10, initializer=initializer) as p:
+    with Pool(14, initializer=initializer) as p:
         data = p.map(process_league_year_players, args)
 
     teams = [team for d in data for team in d[0]]
-    players = [p for d in data for p in d[1]]
-    militancies = [mi for d in data for mi in d[2]]
+    team_militancies = [tm for d in data for tm in d[1]]
+    players = [p for d in data for p in d[2]]
+    militancies = [mi for d in data for mi in d[3]]
     del data
 
     LOGGER.info('Storing teams')
     process_teams(teams)
+    LOGGER.info('Storing team militancies')
+    process_team_militancies(team_militancies)
     LOGGER.info('Storing players')
     process_players(players)
     LOGGER.info('Storing militancies')
