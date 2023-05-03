@@ -87,7 +87,7 @@ def process_players_batch(players_batch: t.List[t.Dict], season: t.Dict):
 
             militancy_values = {'player_id': player_values['id'], 'team_id': team_values['id'],
                                 'year': season['year'], 'start_date': season['start_date'],
-                                'end_date': season['end_date']}
+                                'end_date': season['end_date'], 'appearences': s['games']['appearences'] or 0}
             militancies.append(militancy_values)
 
     teams = list({team['id']: team for team in teams}.values())

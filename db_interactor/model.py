@@ -41,6 +41,7 @@ class Militancy(base):
     year = Column(Integer)
     start_date = Column(Date, default=None)
     end_date = Column(Date, default=None)
+    appearences = Column(Integer)
     team = relationship(Team, backref='player_militancy')
 
 
@@ -53,7 +54,7 @@ class Player(base):
     position = Column(String)
     img = Column(LargeBinary)
     img_url = Column(String)
-    value = Column(Float)
+    value = Column(Float, default=0)
     militancy = relationship(Militancy, backref='player')
 
 
