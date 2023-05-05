@@ -28,42 +28,41 @@ def get_all_player_ids():
 def generate_player_relationships(*args):
     p_id, i, tot = args[0]
     LOGGER.info(f'Player {i+1} of {tot}')
-    militancies = {p_id: set()}
     with db_interactor.get_session() as session:
-        this_player_militancies = session.query(m.Militancy).filter_by(player_id=p_id).all()
-
-        for mi in this_player_militancies:
-            other_players_militancies = session.query(m.Militancy.player_id).filter(
+        player = session.query(m.Player).get(p_id)
+        militancies = {player.id: {'value': player.value, 'relationships': set()}}
+        for mi in player.militancy:
+            other_players_militancies = session.query(m.Militancy).filter(
                 m.Militancy.team_id == mi.team_id, m.Militancy.start_date >= mi.start_date,
-                m.Militancy.end_date <= mi.end_date)
-            militancies[p_id].update([mi[0] for mi in other_players_militancies])
-    if p_id in militancies[p_id]:
-        militancies[p_id].remove(p_id)
+                m.Militancy.end_date <= mi.end_date, m.Militancy.player_id != player.id)
+            for mi2 in other_players_militancies.all():
+                militancies[player.id]['relationships'].add((mi2.player_id, mi2.team_id))
 
     return militancies
 
 
-def dump_csvs(data: t.Dict[str, t.List]):
+def dump_csvs(data: t.Dict[str, t.Dict]):
     # players nodes
     shutil.rmtree('csv_files', ignore_errors=True)
     os.mkdir('csv_files')
     with open('csv_files/players-header.csv', 'w', encoding='UTF8') as f:
         writer = csv.writer(f, delimiter=",")
-        writer.writerow(('playerId:ID', ':LABEL'))
+        writer.writerow(('playerId:ID', ':LABEL', 'value:float'))
 
     LOGGER.info(f'Players csv...')
     with open('csv_files/players.csv', 'w', encoding='UTF8') as f:
         writer = csv.writer(f, delimiter=",")
-        writer.writerows([(p, 'Player') for p in data])
+        writer.writerows([(p_id, 'Player', d['value']) for p_id, d in data.items()])
 
     # relationships
     with open('csv_files/played-with-header.csv', 'w', encoding='UTF8') as f:
         writer = csv.writer(f, delimiter=",")
-        writer.writerow((':START_ID', ':END_ID', ':TYPE'))
+        writer.writerow((':START_ID', ':END_ID', ':TYPE', 'team_id:int'))
     relationships = []
-    for p, rels in data.items():
-        for rp in rels:
-            relationships.append((p, rp, 'PLAYED_WITH'))
+    for p_id, d in data.items():
+        for rp in d['relationships']:
+            p_id2, team_id = rp
+            relationships.append((p_id, p_id2, 'PLAYED_WITH', team_id))
 
     i = 1
     estimated = int(len(relationships) / 100000) + 1
