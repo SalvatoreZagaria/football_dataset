@@ -1,4 +1,5 @@
 import time
+import requests
 import typing as t
 import sqlalchemy
 from sqlalchemy.orm import Session
@@ -19,8 +20,38 @@ def initializer():
     m.engine.dispose(close=False)
 
 
+def download_img(*args):
+    kind, obj_id = args[0]
+    if kind == 'league':
+        table = m.League
+    elif kind == 'team':
+        table = m.Team
+    else:
+        table = m.Player
+
+    with db_interactor.get_session() as session:
+        entity = session.query(table).get(obj_id)
+        img_url = entity.img_url
+        r = requests.get(img_url)
+        if r.status_code != 200:
+            LOGGER.warning(f'Skipping {kind} {obj_id}: {r.status_code} - {r.text}')
+        entity.img = r.content
+
+        session.add(entity)
+        session.commit()
+
+
 def download_images():
-    pass
+    args = []
+    with db_interactor.get_session() as session:
+        for kind, table in zip(('league', 'team', 'player'), (m.League, m.Team, m.Player)):
+            args.extend([(kind, r[0]) for r in session.query(table.id).filter(
+                table.img == sqlalchemy.null(), table.img_url != sqlalchemy.null()).all()]
+                        )
+
+    LOGGER.info(f'Processing {len(args)} entities')
+    with Pool(14, initializer=initializer) as p:
+        p.map(download_img, args)
 
 
 def get_all_teams(session: Session):
