@@ -150,5 +150,5 @@ def collect_valuable_players(up_to_page: int):
 
 
 if __name__ == '__main__':
-    # collect_valuable_players(1000)
+    collect_valuable_players(1000)
     collect_valuable_teams(100)

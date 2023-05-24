@@ -80,7 +80,7 @@ def create_militancy_if_possible(player_id, team_id, transfer_date, session) -> 
         return None
 
     militancy = m.Militancy(player_id=player_id, team_id=team_id, year=season.year, start_date=season.start_date,
-                            end_date=season.end_date)
+                            end_date=season.end_date, appearences=0)
     return militancy
 
 
