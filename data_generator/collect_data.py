@@ -1,6 +1,7 @@
 import typing as t
 from multiprocessing import Pool
 
+from unidecode import unidecode
 from sqlalchemy.dialects.postgresql import insert
 
 import logger
@@ -12,6 +13,10 @@ from db_interactor import model as m
 
 
 LOGGER = logger.get_logger('data_generator')
+
+
+def initializer():
+    m.engine.dispose(close=False)
 
 
 def get_insert_do_nothing_stmt(table, values, no_constraint=False):
@@ -43,7 +48,8 @@ def store_leagues(leagues: t.List[t.Dict]) -> t.List[t.Dict]:
             if not seasons:
                 continue
 
-            values = {'id': l['league']['id'], 'img_url': l['league']['logo'], 'display_name': l['league']['name'],
+            fixed_name = unidecode(l['league']['name'] or '')
+            values = {'id': l['league']['id'], 'img_url': l['league']['logo'], 'display_name': fixed_name,
                       'country_code': l['country']['code']}
             do_nothing_stmt = get_insert_do_nothing_stmt(m.League, values)
             conn.execute(do_nothing_stmt)
@@ -61,29 +67,28 @@ def store_leagues(leagues: t.List[t.Dict]) -> t.List[t.Dict]:
 
 def process_players_batch(players_batch: t.List[t.Dict], season: t.Dict):
     teams = []
-    team_militancies = []
     players = []
     militancies = []
     if not players_batch:
-        return teams, team_militancies, players, militancies
+        return teams, players, militancies
 
     for p in players_batch:
         if not p.get('player', {}).get('id') or not p.get('statistics'):
             continue
-        player_values = {'id': p['player']['id'], 'name': p['player']['firstname'],
-                         'surname': p['player']['lastname'], 'position': p['statistics'][0]['games']['position'],
+
+        fixed_name = unidecode(p['player']['firstname'] or '')
+        fixed_surname = unidecode(p['player']['lastname'] or '')
+        player_values = {'id': p['player']['id'], 'name': fixed_name, 'surname': fixed_surname,
                          'img_url': p['player']['photo']}
         players.append(player_values)
 
         for s in p['statistics']:
             if not s.get('team', {}).get('id'):
                 continue
-            team_values = {'id': s['team']['id'], 'name': s['team']['name'], 'img_url': s['team']['logo']}
-            teams.append(team_values)
 
-            team_militancy_values = {'league_id': s['league']['id'], 'team_id': s['team']['id'],
-                                     'year': season['year']}
-            team_militancies.append(team_militancy_values)
+            fixed_name = unidecode(s['team']['name'] or '')
+            team_values = {'id': s['team']['id'], 'name': fixed_name, 'img_url': s['team']['logo']}
+            teams.append(team_values)
 
             militancy_values = {'player_id': player_values['id'], 'team_id': team_values['id'],
                                 'year': season['year'], 'start_date': season['start_date'],
@@ -91,22 +96,17 @@ def process_players_batch(players_batch: t.List[t.Dict], season: t.Dict):
             militancies.append(militancy_values)
 
     teams = list({team['id']: team for team in teams}.values())
-    team_militancies = list({(tm['league_id'], tm['team_id'], tm['year']): tm for tm in team_militancies}.values())
     militancies = list({(mi['player_id'], mi['team_id'], mi['year']): mi for mi in militancies}.values())
 
-    return teams, team_militancies, players, militancies
-
-
-def initializer():
-    m.engine.dispose(close=False)
+    return teams, players, militancies
 
 
 def process_league_year_players(*args):
     l_id, season = args[0]
     client = api_football_client.APIFootballClient()
     players = client.get_league_players(l_id, season['year'])
-    teams, team_militancies, players, militancies = process_players_batch(players, season)
-    return teams, team_militancies, players, militancies
+    teams, players, militancies = process_players_batch(players, season)
+    return teams, players, militancies
 
 
 def process_teams(teams):
@@ -115,15 +115,6 @@ def process_teams(teams):
     with db_interactor.get_session() as session:
         teams_objs = [m.Team(**team) for team in teams.values()]
         session.bulk_save_objects(teams_objs)
-        session.commit()
-
-
-def process_team_militancies(team_militancies):
-    team_militancies = {(tm['league_id'], tm['team_id'], tm['year']): tm for tm in team_militancies}
-    LOGGER.info(f'TEAMS - storing {len(team_militancies)} team militancies')
-    with db_interactor.get_session() as session:
-        team_militancies_objs = [m.TeamMilitancy(**tm) for tm in team_militancies.values()]
-        session.bulk_save_objects(team_militancies_objs)
         session.commit()
 
 
@@ -145,6 +136,46 @@ def process_militancies(militancies):
         session.commit()
 
 
+def store_team_militancy(t_id):
+    t_id = t_id[0]
+    client = api_football_client.APIFootballClient(requests_block=1)
+    leagues = client.get_team_leagues(t_id)
+    if leagues:
+        leagues = [r for r in leagues if r.get('league', {}).get('type') == 'League']
+    else:
+        LOGGER.warning(f'No militancy found for team {t_id}')
+        leagues = []
+
+    ret = []
+    for r in leagues:
+        for s in r.get('seasons') or []:
+            if s.get('year') not in api_client.YEARS:
+                continue
+            ret.append(
+                {'league_id': r.get('league', {}).get('id'), 'team_id': t_id, 'year': s.get('year')}
+            )
+
+    return ret
+
+
+def store_team_militancies():
+    with db_interactor.get_session() as session:
+        team_ids = {r[0] for r in session.query(m.Team.id).all()}
+        league_ids = {r[0] for r in session.query(m.League.id).all()}
+
+    args = [(r,) for r in team_ids]
+    LOGGER.info(f'LEAGUES - Processing ({len(args)}) team militancies')
+
+    with Pool(14, initializer=initializer) as p:
+        data = p.map(store_team_militancy, args)
+
+    team_militancies = list({tuple(tm_obj.values()): m.TeamMilitancy(**tm_obj) for d in data for tm_obj in d
+                             if tm_obj['league_id'] in league_ids and tm_obj['team_id'] in team_ids}.values())
+    with db_interactor.get_session() as session:
+        session.bulk_save_objects(team_militancies)
+        session.commit()
+
+
 def main():
     db_interactor.init_db()
     client = api_football_client.APIFootballClient(requests_block=5)
@@ -157,19 +188,19 @@ def main():
         data = p.map(process_league_year_players, args)
 
     teams = [team for d in data for team in d[0]]
-    team_militancies = [tm for d in data for tm in d[1]]
-    players = [p for d in data for p in d[2]]
-    militancies = [mi for d in data for mi in d[3]]
+    players = [p for d in data for p in d[1]]
+    militancies = [mi for d in data for mi in d[2]]
     del data
 
     LOGGER.info('Storing teams')
     process_teams(teams)
     LOGGER.info('Storing team militancies')
-    process_team_militancies(team_militancies)
     LOGGER.info('Storing players')
     process_players(players)
     LOGGER.info('Storing militancies')
     process_militancies(militancies)
+
+    store_team_militancies()
 
 
 if __name__ == '__main__':

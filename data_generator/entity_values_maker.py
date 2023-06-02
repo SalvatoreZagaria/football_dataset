@@ -6,6 +6,7 @@ import typing as t
 from pathlib import Path
 from multiprocessing import Pool
 
+from unidecode import unidecode
 import sqlalchemy
 from sqlalchemy.orm import Session
 from fuzzywuzzy import fuzz
@@ -57,8 +58,8 @@ def fix_team_name(s: str) -> str:
 
 def process_team(team):
     team = team[0]
-    team_name = fix_team_name(team['team'])
-    league_name = fix_league_name(team['league'])
+    team_name = unidecode(fix_team_name(team['team']))
+    league_name = unidecode(fix_league_name(team['league']))
 
     with db_interactor.get_session() as session:
         teams_records = session.query(m.Team).filter(m.Team.name == team_name).all()
@@ -121,8 +122,8 @@ def get_potential_teams(name: str, session: Session):
 
 def process_player(player):
     player = player[0]
-    player_name = player['player']
-    team_name = player['team']
+    player_name = unidecode(player['player'])
+    team_name = unidecode(player['team'])
 
     with db_interactor.get_session() as session:
         players_records = get_potential_players(player_name, session)
@@ -278,7 +279,7 @@ def main(teams_path: str, players_path: str, cut_players: int = None):
 
 if __name__ == '__main__':
     main(
-        '/Users/salvo/dev/repos/football_dataset/api_client/.transfermarkt_results/teams_04_29_2023__16_20_06.json',
-        '/Users/salvo/dev/repos/football_dataset/api_client/.transfermarkt_results/players_04_29_2023__16_10_45.json'
+        '/Users/salvo/dev/repos/football_dataset/api_client/.transfermarkt_results/teams_06_02_2023__22_08_09.json',
+        '/Users/salvo/dev/repos/football_dataset/api_client/.transfermarkt_results/players_06_02_2023__22_07_07.json'
     )
 

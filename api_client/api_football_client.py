@@ -55,7 +55,7 @@ class APIFootballClient:
                     raise api_client.APILimitReached(msg)
                 LOGGER.warning(msg)
                 retried = True
-                time.sleep(15)
+                time.sleep(60)
                 continue
             if response.status_code == 429:
                 msg = f'Rate limit: {response.status_code} : {response.text}'
@@ -131,5 +131,11 @@ class APIFootballClient:
     def get_team_transfers(self, team_id):
         LOGGER.info(f'requesting team transfers - {team_id}')
         response = self.get_clean_response('transfers', params={'team': team_id})
+
+        return response
+
+    def get_team_leagues(self, team_id):
+        LOGGER.info(f'requesting team leagues - {team_id}')
+        response = self.get_clean_response('leagues', params={'team': team_id})
 
         return response

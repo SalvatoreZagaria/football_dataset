@@ -152,4 +152,5 @@ def fix_transfers():
 if __name__ == '__main__':
     start = time.time()
     fix_transfers()
+    download_images()
     print(f'Time taken: {time.time() - start}')

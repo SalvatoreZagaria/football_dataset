@@ -51,7 +51,6 @@ class Player(base):
     id = Column(Integer, primary_key=True)
     name = Column(String)
     surname = Column(String)
-    position = Column(String)
     img = Column(LargeBinary)
     img_url = Column(String)
     value = Column(Float, default=0)
